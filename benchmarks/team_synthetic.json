@@ -1,0 +1,43 @@
+{
+  "provenance": "team-authored synthetic; NOT organizer DEV/PROD; NOT ground truth",
+  "records": [
+    {
+      "conversation_id": "cqa-synthetic-kz-codeswitch-v1",
+      "channel": "agent chat",
+      "language": "KZ",
+      "transcript": [
+        {
+          "timestamp": "00:00",
+          "speaker": "client",
+          "text": "Сәлеметсіз бе! Хочу найти свой тариф в веб-кабинете, отчёт жүктегім келмейді."
+        },
+        {
+          "timestamp": "00:01",
+          "speaker": "bot",
+          "text": "Сізді операторға қосамын. Клиент веб-нұсқаны пайдаланып отыр."
+        },
+        {
+          "timestamp": "00:04",
+          "speaker": "system",
+          "text": "Чат операторға жіберілді."
+        },
+        {
+          "timestamp": "00:05",
+          "speaker": "operator",
+          "text": "Сәлеметсіз бе! Менің атым Айдана. В веб-версии откройте «Кабинет»: тариф указан под вашим именем. Есепті жүктеу қажет емес."
+        },
+        {
+          "timestamp": "00:20",
+          "speaker": "client",
+          "text": "Нашла, рақмет! Больше вопросов нет."
+        },
+        {
+          "timestamp": "00:25",
+          "speaker": "operator",
+          "text": "Тарифті веб-кабинеттен таптыңыз. Ещё чем-нибудь помочь? Сау болыңыз!"
+        }
+      ],
+      "audio_url": null
+    }
+  ]
+}

@@ -1,0 +1,229 @@
+{
+  "suite_id": "multilingual-v1",
+  "schema_version": "1",
+  "selection": "fixed coverage-stratified IDs; no random sampling",
+  "checklist_sha256": "13efa257d8c95d101e1f24aacc26f4edafdb16273086e2ba4107150bf3804a6f",
+  "preflight_ids": [
+    "p1-ru-002",
+    "cqa-synthetic-kz-codeswitch-v1",
+    "p1-en-014"
+  ],
+  "required_coverage": [
+    "code_switch_ru_kz",
+    "na",
+    "critical",
+    "poor_closure",
+    "missing_identification",
+    "disputed_consultation",
+    "incomplete_data",
+    "good_dialogue"
+  ],
+  "cases": [
+    {
+      "conversation_id": "p1-ru-001",
+      "language": "RU",
+      "source": "organizer_dev_synthetic",
+      "sha256": "6090935d4084c4d27d5f3829811c8bc86c2111a5c2e3606be33e045cf6f25c31",
+      "tags": [
+        "na",
+        "poor_closure",
+        "bot_context"
+      ],
+      "split": "calibration"
+    },
+    {
+      "conversation_id": "p1-ru-002",
+      "language": "RU",
+      "source": "organizer_dev_synthetic",
+      "sha256": "acbf5bdd26648cd56c917911c4fceaf33b19ac9a7f19aaaf73ec697412eb380c",
+      "tags": [
+        "good_dialogue",
+        "discovery",
+        "uncertainty"
+      ],
+      "split": "calibration"
+    },
+    {
+      "conversation_id": "p1-ru-003",
+      "language": "RU",
+      "source": "organizer_dev_synthetic",
+      "sha256": "0c882478ddad44ba8fe09b81f65effb59eb4444e05bd9ca13d7efdbfcb9eb998",
+      "tags": [
+        "disputed_consultation",
+        "multiple_questions"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "p1-ru-006",
+      "language": "RU",
+      "source": "organizer_dev_synthetic",
+      "sha256": "ca3bae79669f5612b401a81f7a526fbe0dbed474b292430e1a33ae08343b7553",
+      "tags": [
+        "identification_order",
+        "good_dialogue",
+        "empathy"
+      ],
+      "split": "calibration"
+    },
+    {
+      "conversation_id": "p1-ru-025",
+      "language": "RU",
+      "source": "organizer_dev_synthetic",
+      "sha256": "c48b76434d8523614a6fb30dae8154ece56955afaffbef1c15ee497180b8d736",
+      "tags": [
+        "incomplete_data",
+        "na",
+        "abrupt_end"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "p1-ru-029",
+      "language": "RU",
+      "source": "organizer_dev_synthetic",
+      "sha256": "89f415056b845da03088d878dceb3c81770070dc38be2b2a252418128134c593",
+      "tags": [
+        "critical",
+        "insult",
+        "empathy"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "p1-kz-003",
+      "language": "KZ",
+      "source": "organizer_dev_synthetic",
+      "sha256": "22142d89ad19d0726655fb0fafcbbbfe2556ce5b4616897f645dad908a4743b0",
+      "tags": [
+        "identification_order",
+        "empathy",
+        "multiple_questions"
+      ],
+      "split": "calibration"
+    },
+    {
+      "conversation_id": "p1-kz-005",
+      "language": "KZ",
+      "source": "organizer_dev_synthetic",
+      "sha256": "c4c947090ee5d329511ad690d2620bc7cb930926d7bd10d90c0fb2018177479e",
+      "tags": [
+        "dialogue_repair",
+        "poor_closure"
+      ],
+      "split": "calibration"
+    },
+    {
+      "conversation_id": "p1-kz-012",
+      "language": "KZ",
+      "source": "organizer_dev_synthetic",
+      "sha256": "4902a64675e84b4b670b1a5696f97e9c926727e54be60ce985123e29a67c366b",
+      "tags": [
+        "incomplete_data",
+        "discovery"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "p1-kz-013",
+      "language": "KZ",
+      "source": "organizer_dev_synthetic",
+      "sha256": "9adb30d5ca5d1961c8df53acc07695cce23feee061bd667f6778652c5b338917",
+      "tags": [
+        "critical",
+        "off_platform_service"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "p1-kz-015",
+      "language": "KZ",
+      "source": "organizer_dev_synthetic",
+      "sha256": "b0e7fb18fd22f2bc45296a6247990bdef4db24b369ba34ad660a61d6f905fd53",
+      "tags": [
+        "missing_identification",
+        "confidentiality"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "cqa-synthetic-kz-codeswitch-v1",
+      "language": "KZ",
+      "source": "team_synthetic",
+      "sha256": "359e9cf2584fc7ea79fdfa08b96ba41c9cb7e16339988d796276538de01686b2",
+      "tags": [
+        "code_switch_ru_kz",
+        "na",
+        "good_dialogue"
+      ],
+      "split": "calibration"
+    },
+    {
+      "conversation_id": "p1-en-002",
+      "language": "EN",
+      "source": "organizer_dev_synthetic",
+      "sha256": "9abd01733610affeb8650dcd1693cada9b17a01d98fcf3e4837915f1d67c8fd4",
+      "tags": [
+        "good_dialogue",
+        "bot_context"
+      ],
+      "split": "calibration"
+    },
+    {
+      "conversation_id": "p1-en-006",
+      "language": "EN",
+      "source": "organizer_dev_synthetic",
+      "sha256": "cd6153dd378311a9dcba10b96cedb4f566fa47dbb828fd98199ea0e48798ac81",
+      "tags": [
+        "identification_order",
+        "empathy",
+        "multiple_questions"
+      ],
+      "split": "calibration"
+    },
+    {
+      "conversation_id": "p1-en-007",
+      "language": "EN",
+      "source": "organizer_dev_synthetic",
+      "sha256": "5af6c4fdb0ef5e4c3402e9381dbb2b9f5c1fc3798a1ea76b1eb81e855355db5b",
+      "tags": [
+        "disputed_consultation",
+        "partial_answer"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "p1-en-009",
+      "language": "EN",
+      "source": "organizer_dev_synthetic",
+      "sha256": "f94d49eee3332d76f565ee772297e63aca1050d6b0ef8c4d76d12e03a557447f",
+      "tags": [
+        "poor_closure"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "p1-en-013",
+      "language": "EN",
+      "source": "organizer_dev_synthetic",
+      "sha256": "7227c0417529ac052cbb93d684b945ed12ee253775679dd5f9f51889f3019dbb",
+      "tags": [
+        "critical",
+        "off_platform_service"
+      ],
+      "split": "holdout"
+    },
+    {
+      "conversation_id": "p1-en-014",
+      "language": "EN",
+      "source": "organizer_dev_synthetic",
+      "sha256": "e9dc9c616fa4d935b0b7ceada3ffb9ad7b3835b885e148caf0ed6f045d080284",
+      "tags": [
+        "missing_identification",
+        "confidentiality"
+      ],
+      "split": "calibration"
+    }
+  ],
+  "split_policy": "9 calibration / 9 holdout, 3 of each language in each. Preflight uses calibration only. Do not tune prompts on holdout labels."
+}

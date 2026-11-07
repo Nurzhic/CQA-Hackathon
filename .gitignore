@@ -1,0 +1,29 @@
+.env
+.env.*
+!.env.example
+.venv/
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.db
+*.db-*
+data/
+tmp/
+.DS_Store
+*.log
+# Original PDFs can contain signed credentials in link annotations.
+/*.pdf
+/docs/*.pdf
+# Local build state and confidential recordings.
+*.tsbuildinfo
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
