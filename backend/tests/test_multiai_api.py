@@ -34,7 +34,7 @@ def test_estimate_approval_persist_expert_and_report(app_client,env):
     sample=app_client.get('/api/benchmark/sample').json()
     assert len(sample)==18 and all(r['channel']=='agent chat' for r in sample)
     assert app_client.get('/api/benchmark/report').json()['models']['gpt-6.1-sol']['report'] is None
-    labels=answers(conversation())[1]['criteria']
+    labels=[{'criterion_id':cid,**a} for cid,a in answers(conversation())[1]['criteria'].items()]
     label=app_client.post('/api/benchmark/labels',json={'conversation_id':'RU0','reviewer':'Test expert','criteria':labels})
     assert label.status_code==201,label.text
     report=app_client.get('/api/benchmark/report').json()

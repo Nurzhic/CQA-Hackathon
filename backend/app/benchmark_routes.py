@@ -1,11 +1,29 @@
 from fastapi import APIRouter,HTTPException
 from sqlalchemy import select
-from . import benchmark_suite,annotations,benchmark_report,batch
+from . import benchmark_suite,annotations,benchmark_report,batch,ai_draft_review,fast_review,accuracy_analysis
 from .storage import BenchmarkAnnotationRow,BenchmarkRunRow
 from .checklist import OFFICIAL
 
 def create_router(session_factory):
     router=APIRouter()
+    @router.get('/api/benchmark/fast-review')
+    def human_workspace(slot:str):
+        with session_factory()() as s:return fast_review.workspace(s,slot)
+    @router.post('/api/benchmark/fast-review/save',status_code=201)
+    def save_human_round(body:fast_review.BulkRound):
+        with session_factory()() as s:return fast_review.save_round(s,body)
+    @router.post('/api/benchmark/ai-drafts/validate')
+    def validate_ai_draft(body:ai_draft_review.Draft):
+        with session_factory()() as s:return ai_draft_review.validate(s,body)
+    @router.post('/api/benchmark/ai-drafts/review')
+    def review_ai_draft(body:ai_draft_review.ReviewRequest):
+        with session_factory()() as s:return ai_draft_review.record_review(s,body)
+    @router.get('/api/benchmark/ai-drafts/cases/{cid}')
+    def ai_draft_transcript(cid:str):
+        with session_factory()() as s:
+            manifest,cases=benchmark_suite.load(s)
+            if cid not in cases:raise HTTPException(404,'Case not in pinned suite')
+            return {'conversation':cases[cid].model_dump(),'context':annotations.context(manifest,cases[cid]),'checklist':OFFICIAL.model_dump()}
     @router.post('/api/benchmark/prepare')
     def prepare():
         with session_factory()() as s:
@@ -24,10 +42,11 @@ def create_router(session_factory):
             if cid not in cases:raise HTTPException(404,'Case not in pinned suite')
             c=cases[cid];ctx=annotations.context(manifest,c);rows=annotations.latest(s,cid,ctx)
             own=rows.get(slot)
-            result={'conversation':c.model_dump(),'source':next(m['source'] for m in manifest['cases'] if m['conversation_id']==cid),'checklist':OFFICIAL.model_dump(),'annotation':annotations.packed(own) if own else None}
+            result={'conversation':c.model_dump(),'source':next(m['source'] for m in manifest['cases'] if m['conversation_id']==cid),'checklist':OFFICIAL.model_dump(),'context':ctx,'annotation':annotations.packed(own) if own else None}
             if slot=='consensus':
-                result['adjudication']=annotations.state(s,manifest,c)
-                result['independent_rounds']={key:annotations.packed(rows[key]) for key in ('A','B') if key in rows}
+                ready=annotations.rounds_complete(s,manifest,cases)
+                result['adjudication']=annotations.state(s,manifest,c) if ready else {'based_on':[],'disagreements':[],'status':'awaiting_independent_rounds'}
+                result['independent_rounds']={key:annotations.packed(rows[key]) for key in ('A','B')} if ready else {}
             return result
     @router.post('/api/benchmark/annotations',status_code=201)
     def save(body:annotations.Annotation):
@@ -50,6 +69,9 @@ def create_router(session_factory):
         with session_factory()() as s:
             manifest,cases=benchmark_suite.load(s)
             return [annotations.state(s,manifest,c) for c in cases.values()]
+    @router.get('/api/benchmark/error-analysis')
+    def error_analysis(pipeline_sha256:str|None=None):
+        with session_factory()() as s:return accuracy_analysis.analyze(s,pipeline_sha256)
     @router.get('/api/benchmark/comparison')
     def report(pipeline_sha256:str|None=None):
         with session_factory()() as s:return benchmark_report.report(s,pipeline_sha256)

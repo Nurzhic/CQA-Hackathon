@@ -1,0 +1,387 @@
+[
+  {
+    "name": "valid",
+    "target": "criteria",
+    "path": [],
+    "op": "none",
+    "category": null
+  },
+  {
+    "name": "missing_field",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "rationale"
+    ],
+    "op": "delete",
+    "category": "missing_field"
+  },
+  {
+    "name": "invalid_type",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "value"
+    ],
+    "op": "set",
+    "value": "true",
+    "category": "invalid_type"
+  },
+  {
+    "name": "incomplete_json",
+    "target": "criteria",
+    "op": "raw",
+    "value": "{\"criteria\":",
+    "category": "malformed_json"
+  },
+  {
+    "name": "malformed_json",
+    "target": "facts",
+    "op": "raw",
+    "value": "{broken",
+    "category": "malformed_json"
+  },
+  {
+    "name": "truncated",
+    "target": "criteria",
+    "op": "truncate",
+    "category": "truncated_output"
+  },
+  {
+    "name": "forbidden_na",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "value"
+    ],
+    "op": "set",
+    "value": null,
+    "category": "invalid_na"
+  },
+  {
+    "name": "contradictory_na",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "discovery",
+      "value"
+    ],
+    "op": "na",
+    "category": "invalid_na"
+  },
+  {
+    "name": "missing_na_reason",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "discovery",
+      "value"
+    ],
+    "op": "na_reason",
+    "category": "invalid_na"
+  },
+  {
+    "name": "invalid_scale",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "dialogue",
+      "value"
+    ],
+    "op": "set",
+    "value": 5,
+    "category": "invalid_enum"
+  },
+  {
+    "name": "no_quotes_needed",
+    "target": "criteria",
+    "op": "none",
+    "category": null
+  },
+  {
+    "name": "invalid_turn",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "evidence_turns"
+    ],
+    "op": "set",
+    "value": [
+      999
+    ],
+    "category": "evidence_index_out_of_range"
+  },
+  {
+    "name": "zero_turn",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "evidence_turns"
+    ],
+    "op": "set",
+    "value": [
+      0
+    ],
+    "category": "evidence_zero_index"
+  },
+  {
+    "name": "negative_turn",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "evidence_turns"
+    ],
+    "op": "set",
+    "value": [
+      -1
+    ],
+    "category": "evidence_negative_index"
+  },
+  {
+    "name": "duplicate_turn",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "evidence_turns"
+    ],
+    "op": "set",
+    "value": [
+      1,
+      1
+    ],
+    "category": "evidence_duplicate_index"
+  },
+  {
+    "name": "empty_turns",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "evidence_turns"
+    ],
+    "op": "set",
+    "value": [],
+    "category": "evidence_empty"
+  },
+  {
+    "name": "missing_turns",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "evidence_turns"
+    ],
+    "op": "delete",
+    "category": "missing_field"
+  },
+  {
+    "name": "bool_turn",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "evidence_turns"
+    ],
+    "op": "set",
+    "value": [
+      true
+    ],
+    "category": "evidence_index_type"
+  },
+  {
+    "name": "extra_field",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "PRIVATE_TOKEN_AND_CLIENT_TEXT"
+    ],
+    "op": "set",
+    "value": "PRIVATE_TOKEN_AND_CLIENT_TEXT",
+    "category": "extra_field"
+  },
+  {
+    "name": "missing_criterion",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "critical"
+    ],
+    "op": "delete",
+    "category": "missing_field"
+  },
+  {
+    "name": "unknown_criterion",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "PRIVATE_TOKEN_AND_CLIENT_TEXT"
+    ],
+    "op": "set",
+    "value": {},
+    "category": "extra_field"
+  },
+  {
+    "name": "float_scale",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "dialogue",
+      "value"
+    ],
+    "op": "set",
+    "value": 7.0,
+    "category": "invalid_type"
+  },
+  {
+    "name": "false_uncertainty",
+    "target": "criteria",
+    "path": [
+      "criteria",
+      "contact",
+      "uncertain"
+    ],
+    "op": "uncertain",
+    "category": "missing_field"
+  },
+  {
+    "name": "invalid_fact_turn",
+    "target": "facts",
+    "path": [
+      "evidence",
+      0,
+      "turn"
+    ],
+    "op": "set",
+    "value": 999,
+    "category": "evidence_index_out_of_range"
+  },
+  {
+    "name": "forbidden_fact_na",
+    "target": "facts",
+    "path": [
+      "applicability",
+      "critical"
+    ],
+    "op": "set",
+    "value": false,
+    "category": "invalid_na"
+  },
+  {
+    "name": "provider_envelope_list",
+    "target": "criteria",
+    "op": "envelope",
+    "value": [],
+    "category": "provider_error"
+  },
+  {
+    "name": "provider_envelope_error",
+    "target": "criteria",
+    "op": "envelope",
+    "value": {
+      "error": {
+        "message": "PRIVATE_TOKEN_AND_CLIENT_TEXT"
+      }
+    },
+    "category": "provider_error"
+  },
+  {
+    "name": "provider_choices",
+    "target": "criteria",
+    "op": "choices",
+    "value": [
+      null
+    ],
+    "category": "provider_error"
+  },
+  {
+    "name": "provider_message",
+    "target": "criteria",
+    "op": "choices",
+    "value": [
+      {
+        "finish_reason": "stop",
+        "message": []
+      }
+    ],
+    "category": "provider_error"
+  },
+  {
+    "name": "provider_refusal",
+    "target": "criteria",
+    "op": "choices",
+    "value": [
+      {
+        "finish_reason": "stop",
+        "message": {
+          "refusal": "PRIVATE_TOKEN_AND_CLIENT_TEXT",
+          "content": "{}"
+        }
+      }
+    ],
+    "category": "provider_error"
+  },
+  {
+    "name": "provider_finish_reason",
+    "target": "criteria",
+    "op": "choices",
+    "value": [
+      {
+        "finish_reason": "tool_calls",
+        "message": {
+          "content": "{}"
+        }
+      }
+    ],
+    "category": "provider_error"
+  },
+  {
+    "name": "provider_non_json",
+    "target": "criteria",
+    "op": "envelope_raw",
+    "value": "PRIVATE_TOKEN_AND_CLIENT_TEXT",
+    "category": "provider_error"
+  },
+  {
+    "name": "duplicate_json_key",
+    "target": "criteria",
+    "op": "raw",
+    "value": "{\"criteria\":{},\"criteria\":{}}",
+    "category": "invalid_value"
+  },
+  {
+    "name": "nonfinite_json",
+    "target": "criteria",
+    "op": "raw",
+    "value": "{\"criteria\":NaN}",
+    "category": "malformed_json"
+  },
+  {
+    "name": "missing_fact_field",
+    "target": "facts",
+    "path": [
+      "facts",
+      "language"
+    ],
+    "op": "delete",
+    "category": "missing_field"
+  },
+  {
+    "name": "extra_fact_field",
+    "target": "facts",
+    "path": [
+      "facts",
+      "PRIVATE_TOKEN_AND_CLIENT_TEXT"
+    ],
+    "op": "set",
+    "value": "PRIVATE_TOKEN_AND_CLIENT_TEXT",
+    "category": "extra_field"
+  }
+]

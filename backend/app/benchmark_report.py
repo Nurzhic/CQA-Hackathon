@@ -10,7 +10,7 @@ from .providers import SYSTEM
 def pipeline_digest(options=None):
     from .multiai import fact_schema,assessment_schema
     from .checklist import OFFICIAL
-    return digest({'version':'stage3-v1','system':SYSTEM,'fact_system':FACT_SYSTEM,'implementation_sha256':digest({name:Path(__file__).with_name(name).read_text() for name in ('engine.py','multiai.py','providers.py')}),'fact_schema':fact_schema(OFFICIAL),'assessment_schema':assessment_schema(OFFICIAL),'options':options or {'max_output_tokens':6000,'response_format':'json_schema','max_attempts':2}})
+    return digest({'version':'stage4-evidence-diagnostics-v1','system':SYSTEM,'fact_system':FACT_SYSTEM,'implementation_sha256':digest({name:Path(__file__).with_name(name).read_text() for name in ('engine.py','multiai.py','providers.py','ai_output.py','ai_diagnostics.py')}),'fact_schema':fact_schema(OFFICIAL),'assessment_schema':assessment_schema(OFFICIAL),'options':options or {'max_output_tokens':6000,'response_format':'json_schema','max_attempts':2}})
 
 def report(s,pipeline_sha256=None):
     manifest,cases=load(s)
@@ -41,7 +41,7 @@ def report(s,pipeline_sha256=None):
     reports={}
     for model in models:
         preds=[paired[cid][1][model] for cid in cases if cid in paired]
-        reports[model]={'evaluated':len(candidates[model]),'paired':len(preds),'successful':sum(p['status']=='ok' for p in preds),'report':compare(preds,matched_truth,cases,{c['conversation_id']:c['split'] for c in manifest['cases']}),'all_available_telemetry':telemetry(list(candidates[model].values()),cases)}
+        reports[model]={'evaluated':len(candidates[model]),'paired':len(preds),'successful':sum(p['status']=='ok' for p in preds),'success_rate':sum(p['status']=='ok' for p in preds)/len(preds) if preds else None,'report':compare(preds,matched_truth,cases,{c['conversation_id']:c['split'] for c in manifest['cases']}),'all_available_telemetry':telemetry(list(candidates[model].values()),cases)}
     agreements=[]
     for cid,(_,preds) in paired.items():
         if all(p['status']=='ok' for p in preds.values()):
@@ -49,4 +49,4 @@ def report(s,pipeline_sha256=None):
             agreements.extend(type(a.get(k)) is type(b.get(k)) and a.get(k)==b.get(k) for k in a)
     from .storage import BenchmarkRunRow
     run_spending=[{'id':r.id,**{k:r.payload['outcome'].get(k) for k in ('provider_credit_delta','converted_cost_usd','credit_delta_scope','pricing')}} for r in s.scalars(select(BenchmarkRunRow).where(BenchmarkRunRow.status=='complete')) if r.payload['plan']['mode']!='prod' and 'outcome' in r.payload]
-    return {'run_spending':run_spending,'suite_id':manifest['suite_id'],'manifest_sha256':digest(manifest),'status':'unlabeled' if not consensus else 'labeled' if len(consensus)==len(cases) else 'partially_labeled','cases':len(cases),'expert_labeled':len(consensus),'paired_cases':len(paired),'paired_labeled_cases':len(matched_truth),'comparison_pipeline_sha256':selected_pipeline,'pair_pipeline_hashes':pair_ids,'models':reports,'annotations':[{'conversation_id':cid,**st} for cid,st in labels.items()],'legacy_or_context_mismatch_excluded':excluded,'model_value_agreement':sum(agreements)/len(agreements) if agreements else None,'warning':'Model agreement and final_score are not accuracy. Accuracy uses human consensus on identical paired inputs/pipeline only.'}
+    return {'run_spending':run_spending,'suite_id':manifest['suite_id'],'manifest_sha256':digest(manifest),'status':'unlabeled' if not consensus else 'labeled' if len(consensus)==len(cases) else 'partially_labeled','cases':len(cases),'expert_labeled':len(consensus),'paired_cases':len(paired),'paired_labeled_cases':len(matched_truth),'comparison_pipeline_sha256':selected_pipeline,'pair_pipeline_hashes':pair_ids,'models':reports,'annotations':[{'conversation_id':cid,'status':st['status'],'rounds':st['rounds'],'disagreement_count':len(st['disagreements']),'based_on':st['based_on']} for cid,st in labels.items()],'legacy_or_context_mismatch_excluded':excluded,'model_value_agreement':sum(agreements)/len(agreements) if agreements else None,'warning':'Model agreement and final_score are not accuracy. Accuracy uses human consensus on identical paired inputs/pipeline only.'}

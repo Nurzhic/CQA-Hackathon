@@ -20,10 +20,11 @@ def conversation(language='RU'):
     return Conversation(conversation_id='test-'+language,channel='agent chat',language=language,transcript=[{'timestamp':'00:00','speaker':'operator','text':text}])
 
 def answers(c):
-    facts={'facts':{k:'Test observation' for k in multiai.FACT_KEYS},'applicability':{c.id:True for c in OFFICIAL.criteria},'evidence':[{'turn':1,'quote':c.transcript[0].text,'observation':'Original greeting'}]}
+    facts={'facts':{k:'Test observation' for k in multiai.FACT_KEYS},'applicability':{c.id:True for c in OFFICIAL.criteria},'evidence':[{'turn':1,'observation':'Original greeting'}]}
     output=json.loads(asyncio.run(MockProvider().generate(c,OFFICIAL)).text)
     output['criteria'][0]['value']=True
     for criterion in output['criteria']:criterion['evidence_quotes']=[{'turn':1,'quote':c.transcript[0].text}]
+    output={'criteria':{a['criterion_id']:{k:a.get(k) for k in ('value','rationale','evidence_turns','na_reason','uncertain','uncertainty_reason')} for a in output['criteria']}}
     return facts,output
 
 def transport(monkeypatch,c,mutation=None,status=None,timeout=False,missing_model=False,unsupported=False,actual_model=None,billing=None):
@@ -66,12 +67,12 @@ def test_invalid_outputs_never_accepted(env,failure):
         if fact:return value
         if failure=='json':return '{broken'
         if failure=='empty':return ''
-        if failure=='values':value['criteria'][5]['value']=5
-        if failure=='bounds':value['criteria'][0]['evidence_turns']=[999]
-        if failure=='quote':value['criteria'][0]['evidence_quotes'][0]['quote']='Imaginary sentence'
-        if failure=='duplicates':value['criteria'].append(value['criteria'][0])
-        if failure=='missing':value['criteria'].pop()
-        if failure=='na':value['criteria'][1].update(value=None,na_reason='Uncertain');value['applicability']['discovery']=False
+        if failure=='values':value['criteria']['dialogue']['value']=5
+        if failure=='bounds':value['criteria']['contact']['evidence_turns']=[999]
+        if failure=='quote':value['criteria']['contact']['evidence_quotes']=[{'turn':1,'quote':'Imaginary sentence'}]
+        if failure=='duplicates':value['criteria']['unexpected']=value['criteria']['contact']
+        if failure=='missing':value['criteria'].pop('critical')
+        if failure=='na':value['criteria']['discovery'].update(value=None,na_reason='Uncertain')
         return value
     posts,_=transport(env,c,mutation=mutate)
     result=asyncio.run(evaluate(c,OFFICIAL,multiai.MultiAIProvider()))
@@ -146,10 +147,10 @@ def test_only_explicit_usd_billing_is_usd(env):
     assert stats()['reported_cost_usd']==0.04 and stats()['reported_cost_coverage']==2
 
 
-def test_fabricated_fact_quote_rejected_before_rating(env):
+def test_invalid_fact_turn_rejected_before_rating(env):
     c=conversation()
     def mutate(value,fact):
-        if fact:value['evidence'][0]['quote']='Fabricated fact'
+        if fact:value['evidence'][0]['turn']=999
         return value
     posts,_=transport(env,c,mutation=mutate)
     result=asyncio.run(evaluate(c,OFFICIAL,multiai.MultiAIProvider()))

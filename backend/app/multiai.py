@@ -4,15 +4,16 @@ import asyncio
 import os
 import time
 import math
-from copy import deepcopy
 from urllib.parse import urlsplit
 from email.utils import parsedate_to_datetime
 from datetime import datetime,timezone
 import httpx
-from pydantic import Field, StrictBool
-from .domain import StrictModel, EvidenceQuote, Checklist, Conversation
-from .providers import ProviderReply, SYSTEM, output_schema, prompt
+from pydantic import Field, StrictBool, StrictInt
+from .domain import StrictModel, Checklist, Conversation
+from .providers import ProviderReply, SYSTEM, prompt
 from . import gateway_budget
+from .ai_diagnostics import OutputError,diagnostics
+from . import ai_output
 
 
 def parse_retry_after(value):
@@ -26,10 +27,12 @@ def parse_retry_after(value):
         except (TypeError,ValueError,OverflowError):return None
 
 class ProviderError(ValueError):
-    def __init__(self,message,retryable=False,retry_after=None):
-        super().__init__(message);self.retryable=retryable;self.retry_after=retry_after
+    is_provider_error=True
+    def __init__(self,message,retryable=False,retry_after=None,category="provider_error",path=()):
+        super().__init__(message);self.retryable=retryable;self.retry_after=retry_after;self.category=category;self.path=path
 
-class FactQuote(EvidenceQuote):
+class FactQuote(StrictModel):
+    turn: StrictInt
     observation: str = Field(min_length=1)
 
 class FactReport(StrictModel):
@@ -82,22 +85,19 @@ async def connection_status():
     except httpx.HTTPError:raise ProviderError('MultiAI limits connection failed') from None
 
 FACT_KEYS=['request','greeting','identification','protected_action','completeness','empathy','closure','critical','language']
-FACT_SYSTEM=SYSTEM+'''\nSTAGE 1: extract observations before rating. Return facts, applicability for every supplied criterion (true=applicable), and evidence {turn,quote,observation}. Quotes must be exact nonempty substrings of the ORIGINAL turn text. No ratings or total score at this stage. Inspect messages to the bot for initially sufficient request details; a system identity event may establish verification. Record the order of verification vs protected action. Record ALL client questions and which are answered, and the operator's concrete response to dissatisfaction. Identify farewell separately from a help offer or summary. RU/KZ/EN and mixed Russian/Kazakh are supported: recognize Сәлеметсіз бе, Қайырлы күн, Сау болыңыз, Өкінішке орай, түсінемін as context, not automatic proof of every criterion. Language matching, names, verification and empathy must be judged by context. Do not translate evidence. If transcript is incomplete, record that fact and uncertainty; do not invent missing events.'''
+FACT_SYSTEM=SYSTEM+'''\nSTAGE 1: extract observations before rating. Return concise facts, applicability for every supplied criterion (true=applicable), and evidence {turn,observation}. Select one-based original turn numbers yourself. Do not copy quotations: the backend extracts the exact original text. Use only existing turns; selected turns must actually support your observations. No ratings or total score at this stage. Inspect messages to the bot for initially sufficient request details; a system identity event may establish verification. Record the order of verification vs protected action. Record ALL client questions and which are answered, and the operator's concrete response to dissatisfaction. Identify farewell separately from a help offer or summary. RU/KZ/EN and mixed Russian/Kazakh are supported: recognize Сәлеметсіз бе, Қайырлы күн, Сау болыңыз, Өкінішке орай, түсінемін as context, not automatic proof of every criterion. Language matching, names, verification and empathy must be judged by context. Do not translate evidence. If transcript is incomplete, record that fact and uncertainty; do not invent missing events.'''
 
 def fact_schema(checklist):
-    return {'type':'object','additionalProperties':False,'properties':{'facts':{'type':'object','additionalProperties':False,'properties':{k:{'type':'string'} for k in FACT_KEYS},'required':FACT_KEYS},'applicability':{'type':'object','additionalProperties':False,'properties':{c.id:{'type':'boolean'} for c in checklist.criteria},'required':[c.id for c in checklist.criteria]},'evidence':{'type':'array','items':{'type':'object','additionalProperties':False,'properties':{'turn':{'type':'integer'},'quote':{'type':'string'},'observation':{'type':'string'}},'required':['turn','quote','observation']}}},'required':['facts','applicability','evidence']}
+    return {'type':'object','additionalProperties':False,'properties':{'facts':{'type':'object','additionalProperties':False,'properties':{k:{'type':'string'} for k in FACT_KEYS},'required':FACT_KEYS},'applicability':{'type':'object','additionalProperties':False,'properties':{c.id:{'type':'boolean'} for c in checklist.criteria},'required':[c.id for c in checklist.criteria]},'evidence':{'type':'array','minItems':1,'items':{'type':'object','additionalProperties':False,'properties':{'turn':{'type':'integer','minimum':1},'observation':{'type':'string','minLength':1}},'required':['turn','observation']}}},'required':['facts','applicability','evidence']}
 
 def assessment_schema(checklist):
-    schema=deepcopy(output_schema(checklist))
-    for variant in schema['properties']['criteria']['items']['anyOf']:
-        variant['properties']['evidence_quotes']={'type':'array','items':{'type':'object','additionalProperties':False,'properties':{'turn':{'type':'integer'},'quote':{'type':'string'}},'required':['turn','quote']}}
-        variant['required'].append('evidence_quotes')
-    return schema
+    return ai_output.schema(checklist)
+
 
 def verify_quotes(quotes,conversation):
     for q in quotes:
         if q.turn<1 or q.turn>len(conversation.transcript) or not q.quote.strip() or q.quote not in conversation.transcript[q.turn-1].text:
-            raise ValueError('Evidence quote does not match the original transcript turn')
+            raise OutputError('quote_mismatch',('evidence_quotes',))
 
 def request_body(model,system,content,schema,mode,max_output_tokens=None):
     # The schema is always included in prompt mode as well.
@@ -118,15 +118,16 @@ class MultiAIProvider:
         self.run_id=run_id;self.max_calls=max_calls
         self.max_backoff_seconds=float(os.getenv('MULTIAI_MAX_BACKOFF_SECONDS','30')) if max_backoff_seconds is None else max_backoff_seconds
         if self.mode not in ('json_schema','prompt'):raise ValueError('MULTIAI_RESPONSE_FORMAT must be json_schema or prompt')
-        self._catalog=None;self._fact_key=None;self._facts=None;self.calls=[]
+        self._catalog=None;self._fact_key=None;self._facts=None;self._fact_evidence=[];self.calls=[]
     def begin(self):
-        self.calls=[];self._fact_key=None;self._facts=None
+        self.calls=[];self._fact_key=None;self._facts=None;self._fact_evidence=[];self.current_stage='validation'
     async def catalog_model(self):
         if self._catalog is None:self._catalog=await discover()
         model=next((m for m in self._catalog if m['id']==self.name),None)
         if not model or model.get('availability')!='available' or model.get('model_kind','text')!='text':raise ProviderError('Configured MultiAI model is unavailable; no substitute selected')
         return model
     async def call(self,stage,system,content,schema):
+        self.current_stage=stage
         if os.getenv('ALLOW_PAID_CALLS','false').lower()!='true':raise ProviderError('Paid calls disabled; explicit test/budget approval is required')
         model=await self.catalog_model()
         body=request_body(self.name,system,content,schema,self.mode,self.max_output_tokens)
@@ -140,6 +141,7 @@ class MultiAIProvider:
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds,follow_redirects=False) as client:
                 r=await asyncio.wait_for(client.post(base_url()+'/chat/completions',headers=headers(),json=body),timeout=self.timeout_seconds)
+            audit['http_status']=r.status_code
             if r.status_code!=200:
                 # Read only to classify unsupported feature; never log/persist the response body.
                 unsupported=r.status_code in (400,422) and any(s in r.text.lower() for s in ('response_format','json_schema','structured output'))
@@ -150,7 +152,9 @@ class MultiAIProvider:
                     bound=self.max_backoff_seconds
                     raise ProviderError('MultiAI: rate limit reached',retryable=retry_after is None or retry_after<=bound,retry_after=retry_after)
                 raise http_error(r.status_code)
-            b=r.json();actual=b.get('model')
+            b=r.json()
+            if not isinstance(b,dict) or b.get('error') is not None:raise ProviderError('MultiAI returned an invalid response envelope',True)
+            actual=b.get('model')
             audit['actual_model']=actual
             audit['usage']=safe_usage(b.get('usage'))
             billing=b.get('billing',{})
@@ -165,8 +169,10 @@ class MultiAIProvider:
             choices=b.get('choices')
             if not choices or not isinstance(choices,list):raise ProviderError('MultiAI returned no choices',True)
             choice=choices[0]
-            if choice.get('finish_reason')=='length':raise ProviderError('MultiAI output was truncated',True)
-            text=choice.get('message',{}).get('content')
+            if not isinstance(choice,dict) or not isinstance(choice.get('message'),dict):raise ProviderError('MultiAI returned an invalid response envelope',True,path=('choices',0,'message'))
+            if choice.get('finish_reason') in ('length','max_tokens'):raise ProviderError('MultiAI output was truncated',True,category='truncated_output',path=('choices',0,'finish_reason'))
+            if choice.get('finish_reason')!='stop' or choice['message'].get('refusal'):raise ProviderError('MultiAI output did not complete normally',True,path=('choices',0,'finish_reason'))
+            text=choice['message'].get('content')
             if not isinstance(text,str) or not text.strip():raise ProviderError('MultiAI returned empty content',True)
             audit['latency_ms']=round((time.monotonic()-started)*1000)
             gateway_budget.finish(request_id,'ok',audit);self.calls.append(audit)
@@ -177,11 +183,12 @@ class MultiAIProvider:
             elif isinstance(exc,httpx.HTTPError):error=ProviderError('MultiAI connection failed; reservation retained',True)
             elif isinstance(exc,(json.JSONDecodeError,KeyError,TypeError,AttributeError)):error=ProviderError('MultiAI returned an invalid response envelope',True)
             else:error=exc
-            audit['error']=str(error) if isinstance(error,ProviderError) else type(error).__name__
+            audit['error']=str(error) if isinstance(error,ProviderError) else 'Invalid provider response'
+            audit['diagnostics']=diagnostics(error,stage)
             gateway_budget.finish(request_id,'error',audit);self.calls.append(audit)
             raise error from None
     def telemetry(self):
-        return {'provider':'MultiAI','requested_model':self.name,'calls':self.calls,'request_count':len(self.calls),'usage':[c['usage'] for c in self.calls],'cost_usd':sum(c['cost_usd'] for c in self.calls if c['cost_usd'] is not None) if any(c['cost_usd'] is not None for c in self.calls) else None,'cost_coverage':sum(c['cost_usd'] is not None for c in self.calls),'response_format':self.mode}
+        return {'provider':'MultiAI','requested_model':self.name,'calls':self.calls,'request_count':len(self.calls),'usage':[c['usage'] for c in self.calls],'cost_usd':sum(c['cost_usd'] for c in self.calls if c['cost_usd'] is not None) if any(c['cost_usd'] is not None for c in self.calls) else None,'cost_coverage':sum(c['cost_usd'] is not None for c in self.calls),'response_format':self.mode,'fact_evidence':self._fact_evidence,'output_contract':ai_output.VERSION,'evidence_source':'model_selected_turns/backend_original_full_turn','evidence_semantics_verified':False}
     async def generate(self,conversation:Conversation,checklist:Checklist,feedback=''):
         if conversation.channel=='voice call' and os.getenv('MULTIAI_ALLOW_REAL_CALLS','false').lower()!='true':raise ProviderError('Real calls require separate explicit permission; MultiAI blocked')
         # Canonical validation preserves every original timestamp, text and turn order.
@@ -189,16 +196,23 @@ class MultiAIProvider:
         normalized=json.loads(prompt(conversation,checklist,''))
         key=json.dumps(normalized,ensure_ascii=False)
         if self._fact_key!=key:
-            self.calls=[];self._facts=None;self._fact_key=key
+            self.calls=[];self._facts=None;self._fact_evidence=[];self._fact_key=key
         if self._facts is None:
             text=await self.call('fact_extraction',FACT_SYSTEM,{**normalized,'validation_feedback':feedback},fact_schema(checklist))
-            report=FactReport.model_validate_json(text)
-            if set(report.facts)!=set(FACT_KEYS) or set(report.applicability)!={c.id for c in checklist.criteria} or not report.evidence:raise ValueError('Incomplete extracted facts/applicability/evidence')
-            verify_quotes(report.evidence,conversation)
+            report=FactReport.model_validate(ai_output.decode_json(text))
+            if set(report.facts)!=set(FACT_KEYS):
+                extra=set(report.facts)-set(FACT_KEYS);key=next(iter(extra or set(FACT_KEYS)-set(report.facts)))
+                raise OutputError('extra_field' if extra else 'missing_field',('facts',key),self.current_stage)
+            if set(report.applicability)!={c.id for c in checklist.criteria}:
+                expected={c.id for c in checklist.criteria};extra=set(report.applicability)-expected;key=next(iter(extra or expected-set(report.applicability)))
+                raise OutputError('extra_field' if extra else 'missing_field',('applicability',key),self.current_stage)
+            quotes=ai_output.quotes_for([e.turn for e in report.evidence],conversation,('evidence',))
             for c in checklist.criteria:
-                if not c.allow_na and report.applicability[c.id] is False:raise ValueError('Extracted N/A contradicts checklist applicability rules')
+                if not c.allow_na and report.applicability[c.id] is False:raise OutputError('invalid_na',('applicability',c.id),self.current_stage)
             self._facts=report.model_dump()
+            self._fact_evidence=[{**q,'observation':e.observation} for q,e in zip(quotes,report.evidence)]
         content={**normalized,'verified_facts':self._facts,'validation_feedback':feedback}
-        text=await self.call('criteria_evaluation',SYSTEM+'\nSTAGE 2: apply the supplied checklist to the extracted facts. Do not change applicability established in facts. Include evidence_quotes for EVERY evidence_turn: {turn,quote}, an exact substring from that turn. Evidence for an omitted action must quote where it was expected. Never fabricate or translate quotations. Return every criterion, rationale, applicability, facts and uncertainty. No score or weights in output.',content,assessment_schema(checklist))
+        text=await self.call('criteria_evaluation',SYSTEM+'\nSTAGE 2: apply the supplied checklist to the extracted facts. Return only the criteria object keyed by each supplied criterion_id. Do not repeat facts or applicability. Do not change applicability established in facts. Select evidence_turns yourself from the original one-based transcript indices, only where they support your rationale. For omissions select where the action was expected. The backend copies those original turns; do not return quotes. Use concise rationale without repeating transcript text; preserve na_reason and explicit uncertainty. No score or weights in output.',content,assessment_schema(checklist))
+        output=ai_output.parse_criteria(text,checklist,conversation,self._facts['facts'],self._facts['applicability'])
         meta=self.telemetry();meta['fact_applicability']=self._facts['applicability'];meta['extracted_facts']=self._facts['facts']
-        return ProviderReply(text,{},meta['cost_usd'],self.name,meta)
+        return ProviderReply(output.model_dump_json(),{},meta['cost_usd'],self.name,meta)

@@ -13,8 +13,8 @@ def main_cli():
     templates=sub.add_parser('label-templates');templates.add_argument('--out-dir',required=True)
     labels=sub.add_parser('labels-import');labels.add_argument('file')
     sub.add_parser('report')
-    for mode in ('preflight','benchmark','prod'):
-        c=sub.add_parser(mode);c.add_argument('--out',required=True);c.add_argument('--model');c.add_argument('--concurrency',type=int,default=2 if mode=='prod' else 1);c.add_argument('--timeout',type=int,default=90);c.add_argument('--attempts',type=int,default=2);c.add_argument('--deadline',type=int,default=3300);c.add_argument('--max-backoff',type=int,default=30);c.add_argument('--limit-usd',default='0.50');c.add_argument('--catalog',help='Previously verified local catalog snapshot; never fetched by planning')
+    for mode in ('preflight','benchmark','calibration','prod'):
+        c=sub.add_parser(mode);c.add_argument('--out',required=True);c.add_argument('--model');c.add_argument('--concurrency',type=int,default=3 if mode=='calibration' else 2 if mode=='prod' else 1);c.add_argument('--timeout',type=int,default=90);c.add_argument('--attempts',type=int,default=2);c.add_argument('--deadline',type=int,default=3300);c.add_argument('--max-backoff',type=int,default=30);c.add_argument('--limit-usd',default='1.00' if mode=='calibration' else '0.50');c.add_argument('--catalog',help='Previously verified local catalog snapshot; never fetched by planning')
     run=sub.add_parser('run');run.add_argument('plan_file');run.add_argument('--approved',action='store_true');run.add_argument('--evaluations',type=int,required=True);run.add_argument('--limit-usd',required=True)
     args=p.parse_args()
     if args.command=='catalog':
@@ -56,6 +56,7 @@ def main_cli():
         try:result=asyncio.run(batch.execute(main.Session,saved['id'],approval))
         finally:os.environ.pop('MULTIAI_BATCH_APPROVED_PLAN',None)
         print(json.dumps(result,ensure_ascii=False,indent=2));return
+    if Path(args.out).exists():raise ValueError('Plan output already exists; choose a new file')
     options=batch.PlanOptions(mode=args.command,model=args.model,concurrency=args.concurrency,timeout_seconds=args.timeout,max_attempts=args.attempts,max_backoff_seconds=args.max_backoff,deadline_seconds=args.deadline,limit_usd=args.limit_usd)
     catalog=None
     if args.catalog:

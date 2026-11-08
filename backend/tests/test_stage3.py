@@ -52,15 +52,24 @@ def lab(tmp_path,monkeypatch):
         original_input=json.loads(body['messages'][1]['content'])['input'];turns=original_input['conversation']['transcript'];text=turns[0]['text']
         facts={k:'test observation' for k in multiai.FACT_KEYS};applicable={c.id:True for c in OFFICIAL.criteria}
         if 'STAGE 1:' in body['messages'][0]['content']:
-            output={'facts':facts,'applicability':applicable,'evidence':[{'turn':1,'quote':text,'observation':'test quote'}]}
+            output={'facts':facts,'applicability':applicable,'evidence':[{'turn':1,'observation':'test quote'}]}
         else:
             output={'facts':facts,'applicability':applicable,'criteria':[{'criterion_id':c.id,'value':False if c.type=='boolean' else min(c.scale),'rationale':'HTTP mock fixture, not real AI','evidence_turns':[1],'evidence_quotes':[{'turn':1,'quote':text}],'na_reason':None,'uncertain':False,'uncertainty_reason':None} for c in OFFICIAL.criteria]}
+        if 'criteria' in output:
+            output={'criteria':{a['criterion_id']:{k:a[k] for k in ('value','rationale','evidence_turns','na_reason','uncertain','uncertainty_reason')} for a in output['criteria']}}
         return httpx.Response(200,json={'model':body['model'],'choices':[{'finish_reason':'stop','message':{'content':json.dumps(output,ensure_ascii=False)}}],'usage':{'prompt_tokens':10,'completion_tokens':20,'total_tokens':30}})
     monkeypatch.setattr(multiai.httpx,'AsyncClient',lambda **kwargs:original(transport=httpx.MockTransport(handler),**kwargs))
     return {'factory':factory,'monkeypatch':monkeypatch,'manifest':manifest,'catalog':catalog,'tracker':tracker,'tmp':tmp_path}
 
 def labels(cid,slot,reviewer,critical=False):
-    return annotations.Annotation(conversation_id=cid,slot=slot,reviewer=reviewer,origin='human',criteria=[Assessment(criterion_id=c.id,value=critical if c.id=='critical' else True if c.type=='boolean' else max(c.scale),rationale='EXPERT_LABEL_SECRET independent human test fixture',evidence_turns=[1]) for c in OFFICIAL.criteria])
+    return annotations.Annotation(conversation_id=cid,slot=slot,reviewer=reviewer,origin='human',criterion_decisions={c.id:'Human fixture decision based on both rounds' for c in OFFICIAL.criteria} if slot=='consensus' else {},criteria=[Assessment(criterion_id=c.id,value=critical if c.id=='critical' else True if c.type=='boolean' else max(c.scale),rationale='EXPERT_LABEL_SECRET independent human test fixture',evidence_turns=[1]) for c in OFFICIAL.criteria])
+
+def complete_other_cases(s,manifest,cid):
+    # Explicit human fixtures only in the isolated lab. Stage 5 gates consensus on full rounds.
+    for case in manifest['cases']:
+        if case['conversation_id']!=cid:
+            annotations.save(s,labels(case['conversation_id'],'A','Alice'))
+            annotations.save(s,labels(case['conversation_id'],'B','Bob'))
 
 def plan(lab,**kwargs):
     with lab['factory']() as s:return batch.create_plan(s,batch.PlanOptions(**kwargs),lab['catalog'])
@@ -88,6 +97,7 @@ def test_two_blind_reviewers_disagreements_and_stale_consensus(lab):
         b=annotations.save(s,labels(cid,'B','Bob',critical=True))
         state=annotations.state(s,m,cases[cid]);assert state['status']=='needs_adjudication'
         assert state['disagreements'][0]['criterion_id']=='critical'
+        complete_other_cases(s,m,cid)
         final=labels(cid,'consensus','Adjudicator',critical=True);final.based_on=[a['id'],b['id']];final.decision_reason='Reviewed original turn and both independent annotations'
         annotations.save(s,final);assert annotations.state(s,m,cases[cid])['status']=='consensus'
         annotations.save(s,labels(cid,'A','Alice'))
@@ -213,6 +223,7 @@ def test_paired_same_pipeline_consensus_metrics_and_holdout(lab):
     with lab['factory']() as s:
         manifest,cases=benchmark_suite.load(s)
         a=annotations.save(s,labels(cid,'A','Alice'));b=annotations.save(s,labels(cid,'B','Bob'))
+        complete_other_cases(s,manifest,cid)
         final=labels(cid,'consensus','Reviewer');final.based_on=[a['id'],b['id']];final.decision_reason='Independent labels reviewed';annotations.save(s,final)
         ctx={**annotations.context(manifest,cases[cid]),'pipeline_sha256':'frozen-experiment-v1'}
         criteria=[c.model_dump() for c in final.criteria]

@@ -27,3 +27,14 @@ tmp/
 *.m4a
 *.ogg
 *.flac
+# Detailed local preflight evidence/account counters stay out of public Git.
+/output/STAGE3_PREFLIGHT_RESULTS.md
+/output/STAGE3_6_RELIABILITY_RESULTS.md
+
+# User AI draft contains private dataset-derived annotations.
+/CQA_AI_DRAFT_18*.json
+
+/output/AI_DRAFT_REVIEW_UI.jpg
+
+# Ground Truth comparisons stay local.
+/output/STAGE6_*

@@ -22,7 +22,7 @@ from .engine import evaluate
 from .exporter import validate_export
 
 class PlanOptions(StrictModel):
-    mode: Literal['preflight','benchmark','prod']='preflight'
+    mode: Literal['preflight','benchmark','calibration','prod']='preflight'
     model: str | None=None
     concurrency: StrictInt=Field(default=1,ge=1,le=4)
     timeout_seconds: StrictInt=Field(default=90,ge=15,le=300)
@@ -68,7 +68,7 @@ def create_plan(s,options:PlanOptions,catalog=None):
         cases={r.id:Conversation.model_validate(r.payload) for r in rows};manifest=None
     else:
         manifest,all_cases=load(s)
-        ids=manifest['preflight_ids'] if options.mode=='preflight' else list(all_cases)
+        ids=manifest['preflight_ids'] if options.mode=='preflight' else [c['conversation_id'] for c in manifest['cases'] if c['split']=='calibration'] if options.mode=='calibration' else list(all_cases)
         cases={cid:all_cases[cid] for cid in ids}
     if any(c.channel!='agent chat' for c in cases.values()):raise ValueError('Batch scope excludes real calls')
     catalog=cached_catalog() if catalog is None else catalog
@@ -85,6 +85,10 @@ def create_plan(s,options:PlanOptions,catalog=None):
     current=stats()
     pricing={'confirmed':os.getenv('MULTIAI_PRICING_CONFIRMED','false').lower()=='true','usd_per_million_credits':os.getenv('MULTIAI_USD_PER_MILLION_CREDITS') or None,'rub_per_million_credits':os.getenv('MULTIAI_RUB_PER_MILLION_CREDITS') or None,'fx_date':os.getenv('MULTIAI_FX_DATE') or None}
     plan={'schema_version':'1','nonce':uuid.uuid4().hex,'mode':options.mode,'options':options.model_dump(mode='json'),'jobs':jobs,'evaluation_count':len(jobs),'dialogue_count':len(cases),'models':models,'catalog':{m:catalog_signature(meta) for m,meta in metas.items()},'pipeline_sha256':pipeline,'pricing':pricing,'estimated_credits_upper':sum(j['estimated_credits_upper'] for j in jobs),'estimated_usd_upper':usd,'provider_requests_expected':len(jobs)*2,'provider_requests_max':len(jobs)*2*options.max_attempts,'deadline_bound_seconds':worst,'fits_deadline':worst<=options.deadline_seconds,'paid_calls_enabled':os.getenv('ALLOW_PAID_CALLS','false').lower()=='true','required_total_request_limit':current['request_count']+len(jobs)*2*options.max_attempts,'existing_reserved_usd':current['reserved_usd'],'catalog_snapshot':'cached, revalidated before execution','warning':'6 evaluations are 12 expected HTTP generations (two stages), not 6 HTTP requests. Credit estimates are conservative reserves, not an invoice. Execution needs a new explicit plan/count/USD approval.'}
+    if options.mode=='calibration':
+        from .annotations import state
+        plan['human_consensus_ids']={cid:(state(s,manifest,c)['consensus'] or {}).get('id') for cid,c in cases.items()}
+        plan['warning']='Offline calibration plan: 9 cases x 2 models = 18 evaluations. No execution approval. Fresh catalog/quota checks and pinned human consensus required.'
     sha=digest(plan);row=BenchmarkRunRow(status='planned',payload={'plan':plan,'plan_sha256':sha});s.add(row);s.commit()
     return {'id':row.id,'plan_sha256':sha,**plan}
 
@@ -112,6 +116,13 @@ def validate_run(s,row,approval):
     if options.mode!='prod':
         manifest,_=load(s)
         if any(j['context']['manifest_sha256']!=digest(manifest) for j in plan['jobs']):raise ValueError('Benchmark manifest changed after planning')
+    if options.mode=='calibration':
+        from .annotations import state
+        expected={c['conversation_id'] for c in manifest['cases'] if c['split']=='calibration'}
+        if set(cases)!=expected or len(plan['jobs'])!=18 or len(plan['models'])!=2:raise ValueError('Calibration requires exactly 9 pinned inputs on both models')
+        pinned=plan.get('human_consensus_ids',{})
+        current={cid:(state(s,manifest,c)['consensus'] or {}).get('id') for cid,c in cases.items()}
+        if not all(current.values()) or current!=pinned:raise ValueError('Calibration accuracy run requires current pinned human consensus; create a fresh plan after labeling')
     if options.mode=='prod':
         actual={r.id for r in s.scalars(select(ConversationRow).where(ConversationRow.dataset=='PROD'))}
         if actual!=set(cases) or len(cases)!=10:raise ValueError('PROD set changed after approval')
@@ -128,6 +139,13 @@ async def execute(factory,plan_id,approval:Approval):
         actual=next((m for m in live if m['id']==model),None)
         if actual is None or catalog_signature(actual)!=expected:raise ValueError('Live catalog/tariff changed; re-plan and re-approve before spending')
     baseline=await connection_status()
+    if options.mode=='calibration':
+        required=Decimal(plan['estimated_credits_upper']);key=baseline.get('key_limits',{})
+        try:
+            wallet=Decimal(str(baseline.get('account_balance',{}).get('tokens')))
+            remaining=required if key.get('unlimited') is True else Decimal(str(key.get('limit_remaining')))
+            if baseline.get('billing_mode')!='tokens' or not wallet.is_finite() or not remaining.is_finite() or min(wallet,remaining)<required:raise ValueError()
+        except Exception:raise ValueError('Verified wallet and key allowance must cover the full conservative reserve; no generation started') from None
     start_counter=baseline['key_limits'].get('tokens_spent')
     with factory() as s:
         changed=s.execute(update(BenchmarkRunRow).where(BenchmarkRunRow.id==plan_id,BenchmarkRunRow.status=='planned').values(status='running'))
